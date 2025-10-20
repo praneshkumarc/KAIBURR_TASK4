@@ -1,0 +1,38 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: us-east-1
+    CLUSTER_NAME: "<YOUR_EKS_CLUSTER_NAME>"
+    K8S_NAMESPACE: "task-runner"
+  shell: bash
+
+phases:
+  install:
+    commands:
+      - echo "Install kubectl if missing (CodeBuild standard often has it)"
+      - if ! command -v kubectl >/dev/null; then curl -sLO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl /usr/local/bin/; fi
+  pre_build:
+    commands:
+      - echo "Configure kubeconfig"
+      - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $CLUSTER_NAME
+      - echo "Load image URIs from prior stages"
+      - BACKEND_DIR="${CODEBUILD_SRC_DIR_BackendBuild:-$CODEBUILD_SRC_DIR}"   # name set in the pipeline stage mapping
+      - FRONTEND_DIR="${CODEBUILD_SRC_DIR_FrontendBuild:-$CODEBUILD_SRC_DIR}"
+      - BACKEND_IMAGE=$(cat "$BACKEND_DIR/backend-image.txt")
+      - FRONTEND_IMAGE=$(cat "$FRONTEND_DIR/frontend-image.txt")
+      - echo "Backend: $BACKEND_IMAGE"
+      - echo "Frontend: $FRONTEND_IMAGE"
+  build:
+    commands:
+      - echo "Prepare manifests"
+      - cd k8s
+      # Make a temp copy and replace placeholders; make sure your Deployment yaml has these tokens
+      - cp -R . /tmp/manifests
+      - sed -i "s|<BACKEND_IMAGE>|$BACKEND_IMAGE|g" /tmp/manifests/app-deployment.yaml
+      - sed -i "s|<FRONTEND_IMAGE>|$FRONTEND_IMAGE|g" /tmp/manifests/app-deployment.yaml || true
+  post_build:
+    commands:
+      - echo "Deploy"
+      - kubectl create namespace $K8S_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+      - kubectl apply -n $K8S_NAMESPACE -f /tmp/manifests/
