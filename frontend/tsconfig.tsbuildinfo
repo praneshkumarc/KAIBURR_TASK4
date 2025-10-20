@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/theme.ts","./src/types.ts","./src/vite-env.d.ts","./src/api/client.ts","./src/api/tasks.ts","./src/components/headerbar.tsx","./src/components/runoutputmodal.tsx","./src/components/taskemptystate.tsx","./src/components/taskform.tsx","./src/components/tasktable.tsx","./src/hooks/usedebounce.ts"],"version":"5.9.3"}
