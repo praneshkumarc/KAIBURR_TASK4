@@ -1,0 +1,35 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_ACCOUNT_ID: "368677659300"
+    IMAGE_REPO_NAME: kaiburr-backend
+  shell: bash
+
+phases:
+  install:
+    commands:
+      - echo "Using CodeBuild standard image with Docker; privileged mode must be ON"
+  pre_build:
+    commands:
+      - echo "Login to ECR"
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - COMMIT_SHA=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
+      - IMAGE_TAG=${COMMIT_SHA:-latest}
+  build:
+    commands:
+      - echo "Build backend and container"
+      - cd backend
+      - mvn -q -DskipTests package || true  # if your Dockerfile already bundles jar, this is optional
+      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo "Push image"
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - BACKEND_IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG"
+      - echo $BACKEND_IMAGE_URI > backend-image.txt
+artifacts:
+  files:
+    - backend-image.txt
